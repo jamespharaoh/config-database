@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<!--
+
+Copyright 2017 James Pharaoh james@pharaoh.uk
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+-->
+<html>
+<head>
+
+	<title>Configuation database</title>
+
+	<link href="https://fonts.googleapis.com/css?family=Montserrat|Muli" 
+	rel="stylesheet">
+
+	<style type="text/css">
+
+		html {
+			font-family: Muli, sans-serif;
+		}
+
+		body {
+			max-width: 21cm;
+			padding-left: 2cm;
+			padding-right: 2cm;
+		}
+
+		h1 {	
+	    	font-family: Montserrat, sans-serif;
+	    	font-size: 150%;
+	    	font-weight: bold;
+	    	margin-top: 2em;
+	    	margin-bottom: 1em;
+	    }
+
+		h2 {	
+	    	font-family: Montserrat, sans-serif;
+	    	font-size: 130%;
+	    	font-weight: bold;
+	    	margin-top: 1em;
+	    	margin-bottom: 1em;
+	    }
+
+		h3 {	
+	    	font-family: Montserrat, sans-serif;
+	    	font-size: 115%;
+	    	font-weight: bold;
+	    	margin-top: 1em;
+	    	margin-bottom: 1em;
+	    }
+
+		p {
+			margin-top: 1em;
+			margin-bottom: 1em;
+		}
+
+		li {
+			margin-top: 1em;
+			margin-bottom: 1em;
+		}
+
+		strong {
+			font-weight: bold;
+			font-style: italic;
+		}
+
+	</style>
+
+</head>
+<body>
+
+	<h1>Configuration database</h1>
+
+	<p>Copyright 2017 James Pharaoh <a href="mailto:james@pharaoh.uk">
+	james@pharaoh.uk</a></p>
+
+	<p>Released into the public domain under the
+	<a href="https://opensource.org/licenses/MIT">MIT licence</a></p>
+
+	<h2>General information</h2>
+
+	<h3>Overview</h3>
+
+	<p>This document specifies a design for a configuration database system. The
+	basic idea is similar to a conventional database with nested views, but it
+	provides a lot of extra functionality, such as tracking changes through the
+	various layers of translation. It also allows for drastically different
+	modes of operation, for example a simple translation of input data via the
+	rules.</p>
+
+	<p>While it is described as a configuration database, this same concept can
+	be applied to a large number of other areas, for example static generation
+	of documentation or websites.</p>
+
+	<p>I will also describe a number of tools which could be built around the
+	database, which might be analogous to a low level database access such as
+	"psql" or "mysql", a richer UI but still at a low level, such as
+	"phpmyadmin" or "phppgadmin".</p>
+
+	<p>Higher level tools are also envisaged, which could be customised for
+	specific tasks, for example configuration management, or documentation
+	management. The configuration management could be integrated with third
+	party tools and systems to monitor and deploy the configuration. The
+	documentation management could contain high level editors, both for the
+	content and for the rules which define the translation.</p>
+
+	<p>In any configuration, detailed information about the relationship between
+	source data and output data and the rules which have been applied to them
+	would be tracked and made available. This will be extremely fine grained,
+	and be able to demonstrate every piece out output data which was affected by
+	any piece of input data or rule, and the specific effects of any changes
+	made.</p>
+
+	<p>This should also provide a much richer environment for debugging, by
+	providing direct information about the provenance of any data which causes a
+	change or an error during processing, or an unexpected result. Powerful
+	tools for checking validity will also be built into the system, offering
+	further assistance to rule developers and users of
+	the system.</p>
+
+	<p>Finally, perhaps the most important point, is that there are two
+	conflicting forces in the world of software development which I encounter
+	repeatedly. One pushes us to make things more modular, using "dependency
+	injection", for example, and stateless components or software-as a service.
+	The other pressure is to get things done, and to actually combine these
+	things into practical, working applications.</p>
+
+	<p>The more simple your components, and the more of them you need to combine
+	to create a functioning system, the more complex the configuration of those
+	components must necessarily be. There are various attempts to resolve this,
+	but they almost always, in my experience, either restrict you to a single
+	layer of transformation, or at least muddy the waters between layers in
+	confusing ways, or complicate things to the point where the problem is
+	harder than it was originally.</p>
+
+	<p>I believe that this system will enable simple components to be written,
+	for rules for their combination to be made simply and to be simply reused,
+	and to provide an incentive to programmers to not hard-code assumptions into
+	their code, since it will be easier <strong>not</strong> to do so. I want to
+	separate structure and agency, in the same way that functional programming,
+	especially Haskell and its monads, for example, separates logic from side
+	effects.</p>
+
+	<h3>History and future</h3>
+
+	<p>This concept has evolved over a long time, based on my experiences using
+	and developing configuration management systems. I have developed simple
+	implementation of the concepts involved, but developing the full project as
+	conceived is beyond my capacity at the moment.</p>
+
+	<p>Originally, I built a configuration management system written in bash and
+	using SSH, replaced this with a system written in Ruby, then moved
+	configuration data to an XML format. I started running this through XSL in
+	order to make the configuration more dynamic, and then started doing so
+	recursively, in order to allow data to reference the output from other
+	runs.</p>
+
+	<p>This crude system was then replaced with a system where data types were
+	strictly defined, and the rules were run in order over the data, translating
+	to and from data types in a strict heirarchy. Rules could create any output
+	type, or any data type could could be created by hand, but no loops were
+	permitted. XSL was replaced with XQuery, and data was moved from flat files
+	into couchdb.</p>
+
+	<p>This project exists in a stagnant form in Github today. It includes a
+	specification for data types an an editor which uses this to provide a basic
+	web UI for editing data, and for browsing generated data. It also includes a
+	deployment system with an XML-based language for system management, and a
+	tool to run this.</p>
+
+	<p>More recently, I've been using ansible for deployment management, in an
+	effort to work in a less esoteric fashion, although the time taken for an
+	ansible deployment is many times more than was achieved with my deployment
+	tool.</p>
+
+	<p>Ansible also has a confusing and very lacking system for managing data,
+	so I created my own, simplified data model, which maps to ansible's, and
+	have moved a lot of the processing steps outside of ansible, so that it
+	receives an "inventory" with most of the data in a form which is easy (and
+	fast) to process, handles errors before ansible can, reduces conflicts and
+	confusion in terms of variable precedence, and provides basic editing
+	functionality.</p>
+
+	<p>In the future, I would like to develop this to take over more of the
+	stages currently performed by ansible. For example, I would like to generate
+	configuration files directly before ansible is involved, and this would
+	allow me to provide my own error handling logic and simulate changes to them
+	without touching any servers.</p>
+
+	<p>Looking further ahead, I would like to build the database system
+	described below and build my ansible inventory management system on top of
+	this, taking advantage of the robust change tracking and application of
+	rules as described. I would also like to support deployment methods other
+	than ansible.</p>
+
+	<h2>General design</h2>
+
+	<h3>Data model</h3>
+
+	<p>Data is organised into collections of a given type. Each should have a
+	unique name for its type. The data format is flexible, and should be
+	pluggable. A schema is applied to each type, which can also be flexible – eg
+	allowing arbitrary data if the schema dictates this.</p>
+
+	<p>It will be necessary for the core engine to be able to destructure an
+	entry, for some of the more advanced functionality, and so there should be a
+	plugin architecture for this. This will be described in more detail
+	below.</p>
+
+	<p>In short, the system needs to be able to identify the format and schema
+	of an entry, destructure it into elements, and to uniquely identify and
+	access or update a specific element in that structure. Of course, it doesn't
+	strictly "need" to, since an opaque blob of data is of course a valid entry,
+	but much of the intended functionality is useless without this ability.</p>
+
+	<p>Some examples:</p>
+
+	<ul>
+
+		<li>JSON data, using existing JSON schema technology. This is equivalent
+		to a number of other data formats, and could be considered a universal
+		data format (described below).</li>
+
+		<li>Restricted JSON data, allowing only for strings, lists and
+		dictionaries. This is appealing since humans will normally represent
+		data as textual data in structures, with numbers etc being converted to
+		and from text. Binary data can be simply encoded as base64 or similar.
+		Again, this can be considered equivalent to a universal data
+		structure.</li>
+
+		<li>XML data, using existing XML schema technology. XML is much more
+		expressive when creating documents, and a subset can be easily made
+		equivalent to JSON, something which I have implemented many times.
+		Flexible data, specifically lists of data of differing types, are far
+		more naturally represented in XML than in JSON. As with restricted JSON,
+		data types such as numbers will be represented as text.</li>
+
+		<li>Key-value pairs, similar to a traditional database. These could be
+		typed in the same way as a database, or indeed stored in a database,
+		they could be simple data types, or even just strings. Structure can be
+		expressed in a similar way to "normalised" SQL data, ie with separate
+		types and references whenever further structure is required.</li>
+
+		<li>Raw data, either binary or textual. At a low level, the engine will
+		likely consider everything to be raw data, and use modules to provide
+		interpretations in other forms. It might be useful, however, to apply
+		different rules to different types, or even different entries of the
+		same type.</li>
+
+	</ul>
+
+	<p>Whatever data is stored in the system, there should be a registry of data
+	formats and schemas, and each entry should be tagged with a type, and each
+	collection type should specify which of these are permitted as entries.</p>
+
+	<h3>Translation rules</h3>
+
+	<p>The most important part of the system are the rules which allow entries
+	to be implied by other entries. These are similar to materialised database
+	views, except they provide a lot of extra features,far more functionality,
+	and make the processing of data through them much more explicit.</p>
+
+	<p>To a mathematician, a rule may be thought of as "if x then y", that is to
+	say, if I have an entry in some collection which matches x then it should
+	imply an entry in another collection which is defined by y. These rules are
+	applied recursively, so rules can be nested in order to simplify a complex
+	translation into multiple steps, and to reuse parts of a translation which
+	may be fed input from different rules.</p>
+
+	<p>It should of course be possible for rules to, for example, generate a
+	number of entries as the result of a single entry, to process multiple input
+	entries during the creation of a single output entry, and indeed to consult
+	multiple types of entry combining them when producing its output.</p>
+
+	<p>The main restriction is that the rules must form a "acyclic directed
+	graph", although it may be possible and/or desirable to relax this rule. In
+	my opinion, loops of data are best avoided, because they cause confusion and
+	can also cause "non-termination" of the logic.</p>
+
+	<p>One notable exception relates to the allocation of unique identifiers. A
+	simple implementation of this, which I have used previously, is that a rule
+	may generate a specific type of output, which indicates that an allocation
+	needs to be made. This could be done by updating an existing data item, or
+	by creating an entry in a collection specifically dedicated to storing the
+	allocated ids. Another approach would be to simply fill in unique ids during
+	a preprocessing stage for each collection type.</p>
+
+	<p>Ideally rules themselves should be considered data and part of the
+	system. In fact, I believe it should be possible for every entry in the
+	system to be considered a rule. A piece of simple data would be one that
+	simply generates a piece of static data of that type, combined of course
+	with any other rules which generate data of that type. The data in the
+	system should also generate metadata which describes the structure of the
+	system and the relationships between the different collection types. This
+	will be described in a more detailed example below.</p>
+
+	<p>In my use cases, I imagine that a lot of input data will be fairly
+	structured, and considered configuration, and other input data will be in
+	the form of documents. The metadata from these documents would generate more
+	configuration data. The documents themselves may be transformed, eg applying
+	templates or converting a custom format to HTML or other output formats. The
+	configuration data may be extracted directly by its user, for example a
+	system which updates an external DNS service according to the records there,
+	or a configuration file may be generated by a rule which is then
+	transferred, by a similar rule, to the places where it is needed.</p>
+
+	<p>Some examples:</p>
+
+	<ul>
+
+		<li>A configuration system has a set of users, which are managed by
+		hand. Various rules create configuration files which reference this
+		data, such as a unix passwd file, an apache htpasswd file, or a static
+		web page with information about users.</li>
+
+		<li>In the previous system, users may be needed for automated processes,
+		for example a database user may be needed for each deployment of a piece
+		of software, and the designer wishes all users to be represented equally
+		in the user collection. The deployment configuration generates the
+		necessary users alongside the users defined by hand by the system
+		administrators.</li>
+
+		<li>A further example of nesting, which I have also used in the past, is
+		configuring websites. This can involve a large number of separate
+		things, including DNS, load balancer configuration, web server
+		installation and configuration, deployment of code, creation of
+		configuration files, database creation and initialisation, and other
+		steps. If the website definition outputs entry types which signify the
+		need for a DNS record, then a rule which collects these and creates DNS
+		zone files can also accept the same entry type from, for example, an
+		email configuration which needs DNS records. The main output from these
+		could be in the form of zone files, but they could also be used to
+		generate configuration information for updating an externally hosted DNS
+		system, or to generate static documentation.</li>
+
+	</ul>
+
+	<p>Thinking of a static website generator, the input data would probably be
+	a set of documents of various types, other media such as images and their
+	metadata, and possibly templates which would be processed by rules which
+	apply them, or possibly turned into rules (I am not sure the distinction is
+	particularly important). The final stage of the static site might be a
+	collection of “files”, with a name, permission information and other
+	metadata, and their content. This would then allow a tool to show the exact
+	output of the site simply by accessing this data.</p>
+
+	<h3>Versioning and/or transactions</h3>
+
+	<p>This project is conceived as a tool to enable the manipulation of large
+	sets of related data, in a format and structure which is user-friendly or
+	matches input from external systems, and to transform it into a useful
+	output, splitting it into as many stages as desired to reduce complexity
+	into smaller pieces.</p>
+
+	<p>Since one of the primary intentions is to provide as much information as
+	possible about the relationship of input data to output data, and the
+	changes in output data based on changes to input data, it should also be
+	possible to make a provisional change and examine its results before making
+	the change permanent.</p>
+
+	<p>This could take the form of a database transaction, where input data is
+	possibly locked, and the intention is to commit the change quickly. Input
+	data could also potentially be branched with a number of different diverging
+	branches which could then be merged back together, with conflicts being
+	resolved in a similar way to a version tracking system.</p>
+
+	<p>In the case of a configuration management system, this could allow you to
+	see the specific changes to configuration files which will be caused by a
+	change. In a static website generator, you could view the generated
+	site.</p>
+
+	<p>With some simple additional functionality, the static site could even
+	include highlighting for the changed data. This could be done by simply
+	doubling up the input data with a way of identifying the old and new, and
+	allowing rules to take care of the rest. This will be described in more
+	detail below.</p>
+
+	<p>Of course, we may also want to take other ideas from version control
+	systems, such as commit messages, tracking of branches and merges,
+	revocation of changes, comparison, bifurcation to identify the change which
+	caused a problem, etc. With detailed tracking of the relation of output data
+	to the source data, this can provide a very powerful tool for keeping track
+	of a large system.</p>
+
+	<p>By layering the system so that the storage engine is abstracted from the
+	engine and higher-level components, it should be possible to take advantage
+	of whatever system is appropriate for the application. Data may be stored in
+	PostgreSQL or it may be stored in git. Data in PostgreSQL may have a
+	structure which itself provides versioning, branching, etc.</p>
+
+	<p>Transactions would likely not be mapped directly to database
+	transactions, in most cases, but instead handled manually at a higher level.
+	This may be appropriate for some applications, however.</p>
+
+	<h3>Pluggable translation engines</h3>
+
+	<p>The core system should be concerned with the logic of managing input and
+	output data, interacting with version control, other input sources,
+	interacting with user interfaces and other output sources, determining which
+	rules should be applied and when, handling error conditions, etc, It should
+	not be directly involved in the application of rules, which should be
+	considered a pluggable external system.</p>
+
+	<p>I think it is probably important to ensure that rules are applied in an
+	entirely functional manner, which is to say that they should always produce
+	the same output given the same input. In practice, this will probably have
+	to be enforced by the rule implementation, although it should be possible to
+	create engines which enforce this so the programmer doesn't have to.</p>
+
+	<p>To reiterate, I think that to properly benefit from this system then
+	translation engines must be implemented extremely strictly, and that
+	creating a set of reliable but extremely flexible (ie programmable) engines
+	will be a key part of delivering this project. It should be possible to
+	signify to the core when an engine is not trustworthy, and still retain some
+	of the benefits, but this is not the main vision for this project.</p>
+
+	<p>Some examples of translation engines come from my previous
+	implementation, which used XSL and then Xquery to transform XML data. My new
+	experience with ansible suggests that jinja2 would be useful as a templating
+	engine, as indeed would be any other templating engine. Engines could be
+	developed specifically for output of specific file formats, including
+	verification of validity and formatting, and this is something else which I
+	implemented previously.</p>
+
+	<p>Since this is an open specification, rather than a design for a specific
+	implementation, there are a number of ways these engines could be
+	incorporated into an application. The core could be implemented as a library
+	in a programming language and the translation rules could be plugged into
+	it, along with input and output logic, to form a complete application with
+	the configuration database embedded inside.</p>
+
+	<p>I do envision an implementation which resembles a traditional database,
+	with a server and clients. In this case, the server would need a way to
+	invoke rules. It may have a number of programming languages built in which
+	we can use to define rules, it may have engines compiled in or linked in at
+	runtime, or it may call these via RPC as a service.</p>
+
+	<p>In short, I intend for the core logic to be fairly “agnostic” in terms of
+	how the engines are plugged in, while suggesting a number of concrete
+	implementation that I would intend to provide as part of a reference
+	implementation of the project itself.</p>
+
+	<h3>Tracking information provenance</h3>
+
+	<p>One of the main goals of the system is to make it easy to track the
+	provenance of output data back to the input data it was generated from. In a
+	very simple form, the core system should at least be able to track this on
+	the level of entries, since it knows which entries a rule has asked to take
+	as an input, and which entries it has generated as an output.</p>
+
+	<p>At a simple level, the engine should track which input entries are taken
+	into account in the creation of an output entry. In order for change
+	detection to work properly, this should include any entry that could
+	potentially change the rule's output.</p>
+
+	<p>These two pieces of information should be separate, so that the user can
+	trace the actual data source, while the system can trace which rules need to
+	be reevaluated. If the engine is able to specify what type of input it is
+	interested in in a structured fashion, then we can make this process more
+	efficient.</p>
+
+	<p>For example, a rule may generate one output for every input which matches
+	a certain pattern. The core should be able to recognise this and run the
+	rule for each entry that is created/modified/removed which matches that
+	pattern, and to match the output for that rules.</p>
+
+	<p>Furthermore, the rule may need to access other entries while processing
+	that entry. For example, an entry which contains configuration for a website
+	may make reference to a host by name, and the rule would need to look up and
+	depend on that host, or more specifically, the query for that host, and be
+	rerun if that query returns a different result in future.</p>
+
+	<p>I think that this can be largely automated, in a non-granular way, by
+	simply tracking which queries a rule makes. By splitting rule logic into
+	stages, for example one to identify sources and a second one to iterate over
+	each source object, we can easily then track the queries made in the course
+	of evaluating each object, and take the load from the engine
+	implementation.</p>
+
+	<p>Even if a rule is written in a "coarse" manner, requesting a full list of
+	all data objects and producing a complete set of output objects, we can
+	track its "coarse" queries, and we can detect changes in the output and
+	prevent running any downstream rules which depend on entries which haven't
+	changed.</p>
+
+	<p>However, I would like to take this several steps further. Specifically,
+	I'd like to track provenance of information on the most granular level
+	possible. For structured data, at a field level, this should be relatively
+	simple to achieve, since we can simply track what data has been accessed
+	when calculating the output value for the field. This will require the core
+	to be able to identify specific fields, even in structured data, and for the
+	rule to communicate this information.</p>
+
+	<p>Going another step, it would be nice to track things in an even more fine
+	grained way. An obvious example is a large generated configuration file. We
+	should be able to identify the source items of each range of characters in
+	the output and link it to every source which was considered while generating
+	that piece of data. This could and should, of course, also be applied to
+	strings in a structured piece of data, and, indeed, these documents will
+	often be stored this way, accompanied by any appropriate metadata.</p>
+
+	<p>It should be possible to identify different ways in which source data has
+	been used. For example, as the source of a loop with items causing the
+	output of sections of a document, or a conditional statement in a similar
+	way, as the source of an mathematical or other expression, as the input into
+	a translation, such as a conversion of format or string replacement which
+	modifies input while preserving its content in some way (and indeed the
+	parameters to that process), or, obviously, a direct copy of data.</p>
+
+	<p>With this information, a general purpose UI could allow a user to explore
+	their data and its relation to source data, even a non-technical user, eg a
+	web-admin who manages a website which was set up previously by a contracted
+	developer who is no longer present or available sporadically, or even one
+	created from a template. This also applies to changes, of course, and the
+	comparison of the output given a change, and help to identify its cause.</p>
+
+	<h3>Self configuration</h3>
+
+	<p>I have alluded to a variety of high-level user interfaces and tools which
+	centre around the database. Some of these would be generic, and some would
+	be designed for specific applications.</p>
+
+	<p>In both cases, but especially in the generic case, I envisage using the
+	same configuration database to configure the tools themselves. In fact, I
+	imagine that the rules would be managed as data in the system, as would the
+	schemas, and that there would be configuration for whatever UI tools
+	integrated as well.</p>
+
+	<p>This makes it possible to create extremely versatile tools, and makes the
+	configuration of the tools themselves, and all associated tools, a simple
+	implementation detail rather than an unpleasant afterthought.</p>
+
+	<p>It should be possible to create a platform, with the configuration
+	database at its core, with a generic user interface engine and some plugins
+	for input and output, which would act as a rapid-development system for all
+	kinds of things, including static websites, simple configuration managers,
+	and a host of other things.</p>
+
+	<p>The key point here is that the application itself would be customisable
+	to a very high level.</p>
+
+	<h3>Everything is data</h3>
+
+	<p>As I have mentioned above, I think that the rules which comprise the
+	system can be modelled as data just as anything else. This opens up
+	interesting possibilities for generating rules by combining a rule with some
+	kind of input, which in turn opens up the possibility for creating high
+	level rule languages in the system itself, and to do so recursively.</p>
+
+	<p>(As a side note, I was starting to implement this when I gave up. It's
+	hard)</p>
+
+	<p>The general concept is that we abstract the data storage to a level where
+	there is only one type of data, and that it is a rule. What we think of as
+	an input record, then, is a rule which consistently produces a single data
+	item as its output. An item can be stored, however, which does more than
+	that, and this would be a rule. The main difference between a rule and a
+	simple record, then, is that a simple record requires no input, whereas a
+	rule does.</p>
+
+	<p>This implies that at the storage level we would need to add a further
+	item of metadata which defines the engine which processes it. A simple
+	engine can then be built in which simply copies the data verbatim.
+	Programmable engines will process their input and provide information about
+	the rule encoded in them, and also provide a service to perform that
+	process.</p>
+
+	<p>Critical pieces of information will be the types of direct and indirect
+	input entry types which the rule makes reference to. This will be stored in
+	the rule entry in whatever format the translation engine requires. The rule
+	will still be stored in some kind of standard format and adhere to a
+	standard schema, and can be edited according to this schema.</p>
+
+	<p>Finally, it should be clear that since a rule is simply an entry, and
+	rules can create entries, then rules can be created programmatically by
+	processing other rules. While the output that these generated rules will
+	create could simply be created by a rule which does the recursive processing
+	internally, this gives us extra benefits.</p>
+
+	<p>For example, the generated rules can have specific metadata which guides
+	the processing, such as information about the input and output entry types,
+	and the generated rules can be examined just like any other data in the
+	system</p>
+
+	<p>This will all be defined in more detail later.</p>
+
+	<h2>Functional specification</h2>
+
+	<h3>Storage engine</h3>
+
+	<p>A storage engine is able to store entries, either updated manually or
+	created by rules. It must also store metadata as required by the core, for
+	example the relationships between generated entries and their sources and
+	rules. It should also have a concept of transactions, versions, branches,
+	etc. It should also be able to store extra metadata such as user
+	identification.</p>
+
+	<p>Here, we concern ourselves with the specifics of this functionality, in
+	particular a functional description of the interface between the core and
+	the service engine, and the contract between them. The storage engine is
+	assumed to be manipulated by a single core process at any time.</p>
+
+	<p>At the very least, we require the following APIs:</p>
+
+	<ul>
+
+		<li>Create, manage and remove namespaces, roughly analogous to a
+		database. A namespace is an isolated set of data which functions
+		separately from other namespaces, and allows us to use the storage
+		engine to manage more than one set of data. There should presumably be
+		authentication, etc, and possibly other storage attributes. These would
+		be implementation specific.</li>
+
+		<li>Manage namespace versions. There will be an initial version created
+		and assigned an arbitrary ID. They can be cloned, which efficiently
+		copies a version, assigns a new id, and assigns a single parent. Updates
+		can be made to the metadata in a version, including its parent (or list
+		of parents), but not its id, and arbitrary metadata can be
+		assigned.</li>
+
+		<li>Manage collections stored in a version. Collections have a unique
+		unicode name, and a schema name. They may also have other arbitrary
+		metadata, in the form of unicode key/value pairs. A list of collections
+		may be obtained, they may be created and removed, and their metadata,
+		including their name and schema name, may be modified.</li>
+
+		<li>Manage entries stored in a collection. They must be able to be
+		stored, updated, removed and, of course, queried. Querying by key (a
+		unicode string) or by range of key must be supported and efficient.
+		Storage engines may optionally provide other search methods, as an
+		implementation detail.</li>
+
+		<li>Any metadata required for operation of the core, such as
+		relationships between entries, will be managed by the core and stored in
+		specially marked system collections. The core will map high level
+		collection names into low level ones, so that the core does not need to
+		concern itself with this.</li>
+
+	</ul>
+
+	<h3>Format engine</h3>
+
+	<p>A format engine is able to read data in one format, convert it to another
+	format, and to modify it or transform it. This includes the ability to, for
+	example, extract information from a data structure, or modify a data
+	structure given another one.</p>
+
+	<p>At the very least, it should be possible to break down a data structure
+	into a tree of unique unicode ids and values, and to provide a value and
+	identify the format of the value for the data stored in the tree's leaf
+	nodes. It should be possible to list, query, set, modify and remove entries
+	in the tree.</p>
+
+	<p>Non-leaf nodes must not contain data. They should have a unicode type id,
+	the meaning of which is format-dependent.</p>
+
+	<p>There is no guarantee that a tree of nodes with their types and leaves
+	with their formats and values will map to another format. There is, however,
+	a guarantee that the same format can be reproduced exactly by the data in
+	this tree format alone.</p>
+
+	<p>In many cases, the format engine itself may be integrated into the
+	storage engine. For example, if the data is mapped onto an SQL database, it
+	may not be desirable for a row to be retrieved, converted to some binary
+	format, then a single column be extracted. This is an implementation detail
+	and entirely optional, whereas the conversion to a binary format is a
+	universal requirement.</p>
+
+	<h3>Transformation engine</h3>
+
+	<p>A transformation engine has a unicode name and provides rule
+	interpretation for the system. There must be a builtin transformation engine
+	whose name is the empty string and which performs no transformation on the
+	underlying data. Each entry in the system is tagged with the transformation
+	engine it uses.</p>
+
+	<p>The transformation engine, given an entry, must give information about
+	the primary inputs it consumes. These are processed as a mathematical
+	product, or like an SQL join, and there is the possibility for outer joins.
+	Making these joins part of the transformation engine specification will
+	allow more efficiency gains to be provided by the core logic.</p>
+
+	<p>In most cases, there'll be a one to one mapping, or some kind of join
+	criteria will be used to prevent things from getting too inefficient. In the
+	most basic form, the value of a simple tree identifier, supporting basic
+	wildcards, can be used to match entries, eg the rule might want all entries
+	from "user" and "group" where any key "groups.*" in "user" matches "name" in
+	"group". More advanced joins may be supported by the implementation.</p>
+
+	<p>The transformation engine will then be invoked with combinations of the
+	rules and the matching entries. It is able to respond by requesting other
+	pieces of data, with at least a similar simple query system, and to create
+	output entries of any type. The core will manage dependencies automatically,
+	based on the data retrieved, and it will not allow any circular
+	dependencies.</p>
+
+	<p>Transformation engines may also be more specific about the types of entry
+	they are able to query and create, given a rule, if this is appropriate.
+	This may help the core work in a more efficient manner, since it must ensure
+	that there are no loops in the system. I think this will be necessary,
+	specifically, to prove that a data set and rules it generates can be shown
+	to terminate.</p>
+
+	<h3>Schema engine</h3>
+
+	<p>A schema engine is able to take a schema and validate a piece of data
+	against it. Schemas are applied to collections, and store in a special
+	collection. The schemas will be tagged with a schema engine, which will be
+	pluggable.</p>
+
+	<p>The schema engine will process the contents of the schema entry and the
+	entry it is being validated against and provide a result. A result can
+	either be positive or negative, and in the case of a negative result it
+	should be possible to provide more detailed information in a standard way
+	which can be used to locate the location of the error.</p>
+
+	<p>A built in schema engine with no name will accept any data and basically
+	represent raw binary data, or undefined data. Other schema engines could be
+	provided to integrate existing technology, for example there are various XML
+	and JSON schema languages. The schema content would be the schema as
+	accepted by this engine.</p>
+
+	<p>The schema collection should be able to accept the output of rules, so
+	that schemas can be defined in a higher level domain language and
+	transformed into one which is handled by an engine. There should be a way to
+	map the errors from the schema error output so that a meaningful error can
+	be provided to the user. This should be possible by providing a rich API for
+	the schema engine itself.</p>
+
+	<h2>Roadmap</h2>
+
+	<h3>Proof of concept transformation engine</h3>
+
+	<p>The first step is to create a simple version of the core. This should
+	take input in a simple format, including rules and data, and provide an
+	output which includes the input data and the generated data in a separate
+	location. This can simply use the filesystem for storage of both.</p>
+
+	<p>An initial version might use JSON and/or XML for storage formats, enable
+	the translation between them (and of course the key/value equivalent), and
+	output metdata indicating how the rules have been applied. It should also be
+	able to provide useful errors.</p>
+
+	<p>While the first version should run in a single pass, the next obvious
+	step would be to store information about the processing and enable
+	incremental runs. Next, basic tools would be added to modify input data and
+	access output data in a programmatic way.</p>
+
+	<p>The basic tools would then be incorporated into higher level tools,
+	including a server with a basic API, an interactive command line tool, and a
+	web tool. These should be able to function using the API, or using the basic
+	level tools directly. Some kind of simple locking would allow the low level
+	access to be done safely.</p>
+
+	<h3>Configuration tool</h3>
+
+	<p>Once a working core is established, or possibly during its development,
+	some useful application should be developed. The obvious choice for me would
+	be to create a configuration management tool.</p>
+
+	<p>This would extend the simple web and command line tools with an
+	integration into one or more deployment tools. The obvious choice would be
+	ansible, since I have a lot of experience with it, and I believe it provides
+	a rich API for the execution of deployments, although I have not used
+	this.</p>
+
+	<p>During the process I would of course create a working example, ie a set
+	of rules and a real system to manage.</p>
+
+	<h3>Static website tool</h3>
+
+	<p>To further develop the core, there should be more than one application,
+	and so I would suggest the development of some kind of static website
+	generation tool.</p>
+
+	<p>Since it is the most useful application for me, I would be likely to
+	create a documentation tool. I have already created a basic documentation
+	system, in python, which runs as a web server with content provided by a
+	simple directory structure containing markdown files, along with some
+	templates and other logic.</p>
+
+	<p>I would like to continue with markdown for the input, stored in the
+	configuration database, and move the templates as well. It should also be
+	possible to create extensions to the markdown language inside the
+	configuration itself.</p>
+
+	<h3>Modularity</h3>
+
+	<p>Once there is a (small) ecosystem around the core, the modularity
+	discussed above can be worked on. Again, some of this may take place in
+	parallel with the previous steps.</p>
+
+	<p>This would involve creation of the database, schema, format and
+	transformation APIs and backends, starting with the ones built into the POC,
+	and adding at least one extra plugin for each API.</p>
+
+	<p>Where possible, implementations should be created which allow a more
+	flexible interface, for example communication with other processes via a
+	socket or a higher level interface such as HTTP or a message queueing system
+	such as zmq. This would allow simple integration with other languages.</p>
+
+	<h3>Wider adoption</h3>
+
+	<p>Once a stable system is in place and has been tested, I would like to
+	build a community around the system. This would involve creating new
+	applications with a wider appeal, and encouraging new applications to be
+	developed which use the core and which drive its development.</p>
+
+	<p>There's not much more to say about this, since it's a long way in the
+	future.</p>
+
+</body>
+</html>
+
+<!-- ex: noet ts=4 filetype=html -->
